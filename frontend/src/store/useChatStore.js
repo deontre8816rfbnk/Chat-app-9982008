@@ -1,6 +1,7 @@
+
 import { create } from "zustand";
-import toast from "react-hot-toast";
-import { axiosInstance } from "../lib/axios";
+import { firestore } from "../lib/firebase";
+import { collection, query, where, getDocs, onSnapshot, addDoc, serverTimestamp, orderBy } from "firebase/firestore";
 import { useAuthStore } from "./useAuthStore";
 
 export const useChatStore = create((set, get) => ({
@@ -9,60 +10,101 @@ export const useChatStore = create((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
+  unsubscribe: null,
 
   getUsers: async () => {
     set({ isUsersLoading: true });
     try {
-      const res = await axiosInstance.get("/messages/users");
-      set({ users: res.data });
+      const usersRef = collection(firestore, "users");
+      const q = query(usersRef, where("uid", "!=", useAuthStore.getState().authUser.uid));
+      const querySnapshot = await getDocs(q);
+      const users = [];
+      querySnapshot.forEach((doc) => {
+        users.push(doc.data());
+      });
+      set({ users });
     } catch (error) {
-      toast.error(error.response.data.message);
+      console.log("Error in getUsers:", error);
     } finally {
       set({ isUsersLoading: false });
     }
   },
 
-  getMessages: async (userId) => {
+  getMessages: (userId) => {
     set({ isMessagesLoading: true });
-    try {
-      const res = await axiosInstance.get(`/messages/${userId}`);
-      set({ messages: res.data });
-    } catch (error) {
-      toast.error(error.response.data.message);
-    } finally {
-      set({ isMessagesLoading: false });
-    }
-  },
-  sendMessage: async (messageData) => {
-    const { selectedUser, messages } = get();
-    try {
-      const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
-      set({ messages: [...messages, res.data] });
-    } catch (error) {
-      toast.error(error.response.data.message);
-    }
-  },
+    const authUser = useAuthStore.getState().authUser;
+    const chatRef = collection(firestore, "chats");
+    const q = query(
+      chatRef,
+      where("participants", "array-contains", authUser.uid),
+      orderBy("createdAt", "asc")
+    );
 
-  subscribeToMessages: () => {
-    const { selectedUser } = get();
-    if (!selectedUser) return;
-
-    const socket = useAuthStore.getState().socket;
-
-    socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-      if (!isMessageSentFromSelectedUser) return;
-
-      set({
-        messages: [...get().messages, newMessage],
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const chat = change.doc.data();
+          if (chat.participants.includes(userId)) {
+            get().listenForMessages(change.doc.id);
+          }
+        }
       });
+    });
+    set({ unsubscribe });
+  },
+
+  listenForMessages: (chatId) => {
+    const messagesRef = collection(firestore, `chats/${chatId}/messages`);
+    const q = query(messagesRef, orderBy("createdAt", "asc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const messages = [];
+      snapshot.forEach((doc) => {
+        messages.push(doc.data());
+      });
+      set({ messages, isMessagesLoading: false });
+    });
+
+    // we need to update the unsubscribe function to the latest one, which is for messages
+    set({ unsubscribe });
+  },
+
+  sendMessage: async (messageData) => {
+    const { selectedUser } = get();
+    const authUser = useAuthStore.getState().authUser;
+
+    let chatId = await get().findOrCreateChat(selectedUser.uid);
+
+    const messagesRef = collection(firestore, `chats/${chatId}/messages`);
+    await addDoc(messagesRef, {
+      ...messageData,
+      sender: authUser.uid,
+      createdAt: serverTimestamp(),
     });
   },
 
-  unsubscribeFromMessages: () => {
-    const socket = useAuthStore.getState().socket;
-    socket.off("newMessage");
+  findOrCreateChat: async (otherUserId) => {
+    const authUser = useAuthStore.getState().authUser;
+    const chatRef = collection(firestore, "chats");
+    const q = query(chatRef, where("participants", "in", [[authUser.uid, otherUserId], [otherUserId, authUser.uid]]));
+
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].id;
+    } else {
+      const newChatRef = await addDoc(chatRef, {
+        participants: [authUser.uid, otherUserId],
+        createdAt: serverTimestamp(),
+      });
+      return newChatRef.id;
+    }
   },
 
-  setSelectedUser: (selectedUser) => set({ selectedUser }),
+  setSelectedUser: (selectedUser) => {
+    get().unsubscribe?.();
+    set({ selectedUser, messages: [] });
+    if (selectedUser) {
+      get().getMessages(selectedUser.uid);
+    }
+  },
 }));

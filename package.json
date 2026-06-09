@@ -9,5 +9,12 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "firebase": "^12.14.0",
+    "react-hot-toast": "^2.6.0"
+  },
+  "devDependencies": {
+    "gh-pages": "^6.3.0"
+  }
 }

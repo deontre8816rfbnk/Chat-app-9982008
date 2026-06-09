@@ -2,41 +2,33 @@
 
 ![Demo App](/frontend/public/screenshot-for-readme.png)
 
-[Video Tutorial on Youtube](https://youtu.be/ntKkVrQqBYY)
-
 Highlights:
 
-- 🌟 Tech stack: MERN + Socket.io + TailwindCSS + Daisy UI
-- 🎃 Authentication && Authorization with JWT
-- 👾 Real-time messaging with Socket.io
-- 🚀 Online user status
+- 🌟 Tech stack: React.js + Firebase + TailwindCSS + Daisy UI
+- 🎃 Authentication && Authorization with Firebase Authentication
+- 👾 Real-time messaging with Firestore
 - 👌 Global state management with Zustand
-- 🐞 Error handling both on the server and on the client
+- 🐞 Error handling on the client
 - ⭐ At the end Deployment like a pro for FREE!
 - ⏳ And much more!
 
 ### Setup .env file
 
+Create a `.env` file in the `frontend` folder and add the following environment variables:
+
 ```js
-MONGODB_URI=...
-PORT=5001
-JWT_SECRET=...
-
-CLOUDINARY_CLOUD_NAME=...
-CLOUDINARY_API_KEY=...
-CLOUDINARY_API_SECRET=...
-
-NODE_ENV=development
-```
-
-### Build the app
-
-```shell
-npm run build
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
 ```
 
 ### Start the app
 
+Navigate to the `frontend` directory and run the following command:
+
 ```shell
-npm start
+npm install && npm run dev
 ```
